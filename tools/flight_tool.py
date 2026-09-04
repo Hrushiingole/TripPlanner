@@ -873,7 +873,7 @@ def get_best_airport_for_country(country_code: str):
         if not iata:
             continue
 
-        if airport_country_matches(airport, country_code):
+        if airport_country_matches(airport, country_code): # type: ignore
             name = str(airport.get("name", "")).lower()
             city = str(airport.get("city", "")).lower()
 
