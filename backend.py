@@ -29,7 +29,7 @@ from langchain_groq import ChatGroq
 # from tools.flight_tool import search_flights
 
 # mcp imports
-from mcp_client import tavily_mcp_search,avaiation_mcp_call
+from mcp_client import tavily_mcp_search,avaiation_mcp_call,extract_destination,forecast_mcp_search,weather_mcp_search
 
 import os
 
@@ -67,6 +67,7 @@ class TravelState(TypedDict):
     user_query: str
     flight_results: str
     hotel_results: str
+    weather_results: str
     itinerary:str
     llm_calls: int
 
@@ -179,7 +180,35 @@ def hotel_agent(state: TravelState):
     }
 
 
+# =========================
+# Weather Agent
+# =========================
 
+def weather_agent(state: TravelState):
+    city = extract_destination(state["user_query"])
+
+    weather_data=asyncio.run(
+        weather_mcp_search(city)
+    )
+
+    forecast_data=asyncio.run(
+        forecast_mcp_search(city)
+    )
+
+    return {
+        "weather_results":f"""
+        current weather:
+        {weather_data}
+
+        forecast:
+        {forecast_data}        
+        """,
+        "messages":[
+            AIMessage(
+                content="Weather information fetched"
+            )
+        ]
+    }
 
 
 # =====================
@@ -192,6 +221,7 @@ def itinerary_agent(state: TravelState):
     user query: {state['user_query']}
     flight results: {state['flight_results']}
     hotel results: {state['hotel_results']}
+    weather results: {state['weather_results']}
 
     make the itinerary practical , budget-aware and easy to follow. 
     provide a day-wise breakdown of activities, including sightseeing, dining, and any other relevant information.
@@ -224,6 +254,7 @@ def final_agent(state: TravelState):
     user request: {state['user_query']}
     flight results: {state['flight_results']}
     hotel results: {state['hotel_results']}
+    weather results: {state['weather_results']}
     itinerary: {state['itinerary']}
 
     format the final answer beautifully using these sections:
@@ -231,13 +262,15 @@ def final_agent(state: TravelState):
     1. Trip Summary
     2. Flight Information
     3. Hotel Information
-    4. Day-wise Itinerary
-    5. estimated Budget
-    6. final Recommendations
+    4. weather information
+    5. Day-wise Itinerary
+    6. estimated Budget
+    7. final Recommendations
 
     important:
     - be clear and practical.
     - mention that live flight api may not provide ticket prices if prices is unavailable.
+    - Include weather-based travel advice.
     - keep the response useful for real travel planning.
 """
     response= llm.invoke([
@@ -259,12 +292,14 @@ graph=StateGraph(TravelState)
 
 graph.add_node("flight_agent",flight_agent)
 graph.add_node("hotel_agent",hotel_agent)
+graph.add_node("weather_agent",weather_agent)
 graph.add_node("itinerary_agent",itinerary_agent)
 graph.add_node("final_agent",final_agent)
 
 graph.add_edge(START,"flight_agent")
 graph.add_edge("flight_agent","hotel_agent")
-graph.add_edge("hotel_agent","itinerary_agent")
+graph.add_edge("hotel_agent","weather_agent")
+graph.add_edge("weather_agent","itinerary_agent")
 graph.add_edge("itinerary_agent","final_agent")
 graph.add_edge("final_agent",END)
 
@@ -306,6 +341,7 @@ def run_travel_agent(user_input:str, thread_id: str | None = None):
             "user_query":user_input,
             "flight_results": "",
             "hotel_results": "",
+            "weather_results":"",
             "itinerary": "",
             "llm_calls":0
         },
@@ -317,6 +353,7 @@ def run_travel_agent(user_input:str, thread_id: str | None = None):
         "final_answer":final_answer,
         "flight_results": result.get("flight_results",""),
         "hotel_results": result.get("hotel_results",""),
+        "weather_results":result.get("weather_results",""),
         "itinerary": result.get("itinerary",""),
         "llm_calls": result.get("llm_calls",0)
     }
