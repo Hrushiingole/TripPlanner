@@ -1,3 +1,4 @@
+import asyncio
 import os
 import certifi
 from dotenv import load_dotenv
@@ -24,8 +25,11 @@ from langchain_core.messages import (
     AnyMessage
 )
 from langchain_groq import ChatGroq
-from tools.tavily_tool import tavily_search
+# from tools.tavily_tool import tavily_search
 from tools.flight_tool import search_flights
+
+# mcp imports
+from mcp_client_test import tavily_mcp_search
 
 import os
 
@@ -91,7 +95,9 @@ def flight_agent(state: TravelState):
 # =====================
 def hotel_agent(state: TravelState):
     query=f"Best hotels for {state['user_query']}"
-    hotel_results=tavily_search(query)
+    # hotel_results=tavily_search(query)
+
+    hotel_results=asyncio.run(tavily_mcp_search(query))
 
     return {
         "hotel_results":hotel_results,
